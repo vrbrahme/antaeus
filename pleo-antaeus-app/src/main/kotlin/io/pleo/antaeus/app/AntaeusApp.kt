@@ -23,6 +23,12 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import setupInitialData
 import java.sql.Connection
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
+import java.time.temporal.ChronoUnit
+import java.time.ZonedDateTime
+
 
 fun main() {
     // The tables to create in the database.
@@ -30,17 +36,17 @@ fun main() {
 
     // Connect to the database and create the needed tables. Drop any existing data.
     val db = Database
-        .connect("jdbc:sqlite:/tmp/data.db", "org.sqlite.JDBC")
-        .also {
-            TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
-            transaction(it) {
-                addLogger(StdOutSqlLogger)
-                // Drop all existing tables to ensure a clean slate on each run
-                SchemaUtils.drop(*tables)
-                // Create all tables
-                SchemaUtils.create(*tables)
+            .connect("jdbc:sqlite:/tmp/data.db", "org.sqlite.JDBC")
+            .also {
+                TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
+                transaction(it) {
+                    addLogger(StdOutSqlLogger)
+                    // Drop all existing tables to ensure a clean slate on each run
+                    SchemaUtils.drop(*tables)
+                    // Create all tables
+                    SchemaUtils.create(*tables)
+                }
             }
-        }
 
     // Set up data access layer.
     val dal = AntaeusDal(db = db)
@@ -55,13 +61,28 @@ fun main() {
     val invoiceService = InvoiceService(dal = dal)
     val customerService = CustomerService(dal = dal)
 
-    // This is _your_ billing service to be included where you see fit
-    val billingService = BillingService(paymentProvider = paymentProvider)
+    val billingService = BillingService(paymentProvider, invoiceService)
+
+    var dateTime = ZonedDateTime.now()
+    if (dateTime.dayOfMonth >= 1) {
+        dateTime = dateTime.plusMonths(1)
+    }
+    dateTime = dateTime.withDayOfMonth(1)
+    val executorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    val task = Runnable {
+        val now = ZonedDateTime.now()
+        val delay = now.until(now.plusMonths(1), ChronoUnit.DAYS)
+        try {
+            billingService.processPendingInvoices()
+        } finally {
+            executorService.schedule(this, delay, TimeUnit.DAYS)
+        } }
+    executorService.schedule(task, ZonedDateTime.now().until(dateTime, ChronoUnit.DAYS), TimeUnit.DAYS)
 
     // Create REST web service
     AntaeusRest(
-        invoiceService = invoiceService,
-        customerService = customerService
+            invoiceService = invoiceService,
+            customerService = customerService
     ).run()
 }
 
