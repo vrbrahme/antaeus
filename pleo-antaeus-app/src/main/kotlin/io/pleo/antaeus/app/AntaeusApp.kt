@@ -21,6 +21,8 @@ import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.quartz.CronScheduleBuilder.cronSchedule
+import org.quartz.JobBuilder.newJob
 import setupInitialData
 import java.sql.Connection
 import java.util.concurrent.Executors
@@ -28,6 +30,11 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.time.temporal.ChronoUnit
 import java.time.ZonedDateTime
+import org.quartz.SchedulerException
+import org.quartz.impl.StdSchedulerFactory
+import org.quartz.SimpleScheduleBuilder.simpleSchedule
+import org.quartz.JobDetail
+import org.quartz.TriggerBuilder.newTrigger
 
 
 fun main() {
@@ -62,22 +69,24 @@ fun main() {
     val customerService = CustomerService(dal = dal)
 
     val billingService = BillingService(paymentProvider, invoiceService)
+    val scheduler = StdSchedulerFactory.getDefaultScheduler()
+    try {
+        scheduler.start()
+        val job = newJob(billingService.javaClass)
+                .withIdentity("Billing", "Monthly services")
+                .build()
+        val trigger = newTrigger()
+                .withIdentity("payPendingInvoices", "Monthly trigger")
+                .withSchedule(cronSchedule("0 0 10am 1 * ?"))
+                .build()
+        scheduler.scheduleJob(job, trigger)
 
-    var dateTime = ZonedDateTime.now()
-    if (dateTime.dayOfMonth >= 1) {
-        dateTime = dateTime.plusMonths(1)
+    } catch (se: SchedulerException) {
+        se.printStackTrace()
+    } finally {
+        //scheduler.shutdown() needs to be done somewhere on app shutdown
     }
-    dateTime = dateTime.withDayOfMonth(1)
-    val executorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    val task = Runnable {
-        val now = ZonedDateTime.now()
-        val delay = now.until(now.plusMonths(1), ChronoUnit.DAYS)
-        try {
-            billingService.processPendingInvoices()
-        } finally {
-            executorService.schedule(this, delay, TimeUnit.DAYS)
-        } }
-    executorService.schedule(task, ZonedDateTime.now().until(dateTime, ChronoUnit.DAYS), TimeUnit.DAYS)
+
 
     // Create REST web service
     AntaeusRest(
