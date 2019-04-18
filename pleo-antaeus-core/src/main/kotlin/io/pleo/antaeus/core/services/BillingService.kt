@@ -10,13 +10,24 @@ class BillingService(
         private val paymentProvider: PaymentProvider,
         private val invoiceService: InvoiceService
 ) : Job {
+    companion object {
+        const val INVOICE_LIMIT = 100
+    }
+
     override fun execute(context: JobExecutionContext) {
-        val pendingInvoices: List<Invoice> = invoiceService.getPendingInvoices()
+        val pendingInvoices: List<Invoice> = invoiceService.getPendingInvoices(INVOICE_LIMIT)
         for (invoice in pendingInvoices) {
-            if (paymentProvider.charge(invoice)) {
-                val paid: Invoice = invoice.copy(invoice.id, invoice.customerId, invoice.amount, InvoiceStatus.PAID)
-                invoiceService.updateInvoice(paid)
-            }
+            processInvoice(invoice)
         }
+    }
+
+    private fun processInvoice(invoice: Invoice) {
+        if (paymentProvider.charge(invoice)) {
+            invoiceService.markAsPaid(invoice)
+        }
+    }
+
+    fun processInvoice(id: Int) {
+        processInvoice(invoiceService.fetch(id))
     }
 }

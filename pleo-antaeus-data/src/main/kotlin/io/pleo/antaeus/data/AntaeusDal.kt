@@ -78,17 +78,18 @@ class AntaeusDal(private val db: Database) {
         return fetchCustomer(id!!)
     }
 
-    fun getPendingInvoices(): List<Invoice> {
+    fun getPendingInvoices(limit: Int): List<Invoice> {
         return transaction(db) {
             InvoiceTable
                     .select { InvoiceTable.status.eq(InvoiceStatus.PENDING.name) }
+                    .limit(limit, 0)
                     .map { it.toInvoice() }
         }
     }
 
     fun updateInvoice(paid: Invoice): Int {
         return transaction(db) {
-            // Insert the customer and return its new id.
+            // currently only updates the invoice status as changing any other data is as good as creating a new invoice
             InvoiceTable.update({ InvoiceTable.id eq paid.id }) {
                 it[InvoiceTable.status] = paid.status.name
             }
