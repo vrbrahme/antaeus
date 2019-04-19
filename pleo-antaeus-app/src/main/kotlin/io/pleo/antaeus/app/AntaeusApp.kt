@@ -15,6 +15,7 @@ import io.pleo.antaeus.data.AntaeusDal
 import io.pleo.antaeus.data.CustomerTable
 import io.pleo.antaeus.data.InvoiceTable
 import io.pleo.antaeus.rest.AntaeusRest
+import mu.KotlinLogging
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.StdOutSqlLogger
@@ -25,17 +26,12 @@ import org.quartz.CronScheduleBuilder.cronSchedule
 import org.quartz.JobBuilder.newJob
 import setupInitialData
 import java.sql.Connection
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
-import java.time.temporal.ChronoUnit
-import java.time.ZonedDateTime
 import org.quartz.SchedulerException
 import org.quartz.impl.StdSchedulerFactory
-import org.quartz.SimpleScheduleBuilder.simpleSchedule
-import org.quartz.JobDetail
 import org.quartz.TriggerBuilder.newTrigger
+import java.time.LocalDateTime
 
+private val logger = KotlinLogging.logger {}
 
 fun main() {
     // The tables to create in the database.
@@ -80,18 +76,16 @@ fun main() {
                 .withSchedule(cronSchedule("0 0 10am 1 * ?"))
                 .build()
         scheduler.scheduleJob(job, trigger)
-
+        logger.info { "Scheduled job for pending invoices on " + LocalDateTime.now() }
     } catch (se: SchedulerException) {
         se.printStackTrace()
-    } finally {
-        //scheduler.shutdown() needs to be done somewhere on app shutdown
     }
-
 
     // Create REST web service
     AntaeusRest(
             invoiceService = invoiceService,
-            customerService = customerService
+            customerService = customerService,
+            billingService = billingService
     ).run()
 }
 
