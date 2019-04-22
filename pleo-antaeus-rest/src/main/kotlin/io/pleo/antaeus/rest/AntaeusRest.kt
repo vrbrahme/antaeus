@@ -86,7 +86,13 @@ class AntaeusRest (
                            // URL: /rest/v1/pending/:id
                            post("process") {
                                // URL: /rest/v1/pending/:id/process
-                               it.json(billingService.processInvoice(it.pathParam("id").toInt()))
+                               val charged = billingService.processInvoice(it.pathParam("id").toInt())
+                               if (charged) {
+                                   it.status(200)
+                               } else {
+                                   it.status(503).json("Invoice could not be charged, please try again.")
+                               }
+                               it.json(charged)
                            }
                        }
                    }

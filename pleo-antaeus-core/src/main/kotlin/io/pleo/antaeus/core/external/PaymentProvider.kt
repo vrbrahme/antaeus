@@ -16,7 +16,7 @@ interface PaymentProvider {
 
         Returns:
           `True` when the customer account was successfully charged the given amount.
-          `False` when the customer account balance did not allow the charge.
+          `False` when the customer account balance did not allow the chargePendingInvoices.
 
         Throws:
           `CustomerNotFoundException`: when no customer has the given id.

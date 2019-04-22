@@ -32,7 +32,7 @@ class BillingServiceTest {
         every { invoiceService.fetch(invoiceId) } returns mockInvoice
         every { paymentProvider.charge(mockInvoice) } returns true
 
-        billingService.processInvoice(invoiceId)
+        assert(billingService.processInvoice(invoiceId))
 
         verify { invoiceService.markAsPaid(mockInvoice) }
     }
@@ -44,14 +44,13 @@ class BillingServiceTest {
         every { invoiceService.fetch(invoiceId) } returns mockInvoice
         every { paymentProvider.charge(mockInvoice) } returns false
 
-        billingService.processInvoice(invoiceId)
+        assert(!billingService.processInvoice(invoiceId))
 
         verify(exactly = 0) { invoiceService.markAsPaid(mockInvoice) }
     }
 
     @Test
     fun `can process all pending invoices if the invoices have been charged`() {
-        val context = mockk<JobExecutionContext>()
         val invoice1 = Invoice(1, 1, Money(BigDecimal.valueOf(10), Currency.DKK), InvoiceStatus.PENDING)
         val invoice2 = Invoice(2, 1, Money(BigDecimal.valueOf(10), Currency.DKK), InvoiceStatus.PENDING)
         val invoice3 = Invoice(3, 1, Money(BigDecimal.valueOf(10), Currency.DKK), InvoiceStatus.PENDING)
@@ -60,7 +59,7 @@ class BillingServiceTest {
         every { paymentProvider.charge(invoice2) } returns false
         every { paymentProvider.charge(invoice3) } returns true
 
-        billingService.execute(context)
+        assert(billingService.chargePendingInvoices() == 3)
 
         verify { invoiceService.markAsPaid(invoice1) }
         verify { invoiceService.markAsPaid(invoice3) }

@@ -11,6 +11,7 @@ import getPaymentProvider
 import io.pleo.antaeus.core.services.BillingService
 import io.pleo.antaeus.core.services.CustomerService
 import io.pleo.antaeus.core.services.InvoiceService
+import io.pleo.antaeus.core.services.MonthlyBillingJob
 import io.pleo.antaeus.data.AntaeusDal
 import io.pleo.antaeus.data.CustomerTable
 import io.pleo.antaeus.data.InvoiceTable
@@ -22,8 +23,10 @@ import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.quartz.CronScheduleBuilder.cronSchedule
+import org.quartz.CronScheduleBuilder.cronScheduleNonvalidatedExpression
+import org.quartz.Job
 import org.quartz.JobBuilder.newJob
+import org.quartz.JobExecutionContext
 import setupInitialData
 import java.sql.Connection
 import org.quartz.SchedulerException
@@ -68,15 +71,16 @@ fun main() {
     val scheduler = StdSchedulerFactory.getDefaultScheduler()
     try {
         scheduler.start()
-        val job = newJob(billingService.javaClass)
+        scheduler.context.put("billingService", billingService)
+        val job = newJob(MonthlyBillingJob().javaClass)
                 .withIdentity("Billing", "Monthly services")
                 .build()
         val trigger = newTrigger()
                 .withIdentity("payPendingInvoices", "Monthly trigger")
-                .withSchedule(cronSchedule("0 0 10am 1 * ?"))
+                .withSchedule(cronScheduleNonvalidatedExpression("0 0 10am 1 * ?"))
                 .build()
         scheduler.scheduleJob(job, trigger)
-        logger.info { "Scheduled job for pending invoices on " + LocalDateTime.now() }
+        logger.info { "Scheduled job for pending invoices on " + LocalDateTime.now() + ". The job will run next on: " + trigger.nextFireTime }
     } catch (se: SchedulerException) {
         se.printStackTrace()
     }

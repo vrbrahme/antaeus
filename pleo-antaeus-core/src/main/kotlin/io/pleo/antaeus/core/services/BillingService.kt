@@ -2,38 +2,37 @@ package io.pleo.antaeus.core.services
 
 import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.models.Invoice
-import io.pleo.antaeus.models.InvoiceStatus
 import mu.KotlinLogging
-import org.quartz.Job
-import org.quartz.JobExecutionContext
-import java.time.LocalDateTime
 
 private val logger = KotlinLogging.logger {}
 
 class BillingService(
         private val paymentProvider: PaymentProvider,
         private val invoiceService: InvoiceService
-) : Job {
-    companion object {
-        const val INVOICE_LIMIT = 100
-    }
+) {
 
-    override fun execute(context: JobExecutionContext) {
-        logger.info { "Started scheduled job on " + LocalDateTime.now() }
-        val pendingInvoices: List<Invoice> = invoiceService.getPendingInvoices(INVOICE_LIMIT)
-        logger.debug { "Found ${pendingInvoices.size} invoices pending" + LocalDateTime.now() }
+    fun chargePendingInvoices(): Int {
+        val pendingInvoices: List<Invoice> = invoiceService.getPendingInvoices(100)
+        logger.info { "Found ${pendingInvoices.size} invoices pending" }
+        var chargedInvoices = 0
         for (invoice in pendingInvoices) {
-            processInvoice(invoice)
+            if (processInvoice(invoice)) {
+                chargedInvoices++
+            }
         }
+        logger.info { "Charged " + chargedInvoices + " invoices out of " + pendingInvoices.size }
+        return pendingInvoices.size;
     }
 
-    private fun processInvoice(invoice: Invoice) {
-        if (paymentProvider.charge(invoice)) {
+    fun processInvoice(id: Int): Boolean {
+        return processInvoice(invoiceService.fetch(id))
+    }
+
+    private fun processInvoice(invoice: Invoice): Boolean {
+        val charged = paymentProvider.charge(invoice)
+        if (charged) {
             invoiceService.markAsPaid(invoice)
         }
-    }
-
-    fun processInvoice(id: Int) {
-        processInvoice(invoiceService.fetch(id))
+        return charged;
     }
 }
